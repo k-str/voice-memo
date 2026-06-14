@@ -285,80 +285,75 @@
   transcriptBox.addEventListener('input', updateSaveBtn);
 
   let restartTimer = null;
+  let micStream = null; // マイクストリームを保持してAndroidでの権限切れを防ぐ
 
   function createRecognition() {
-    if (!SpeechRecognition) {
-      setStatus('このブラウザは音声認識に対応していません（Chrome推奨）', 'error');
-      micBtn.disabled = true;
-      return null;
-    }
-
     const r = new SpeechRecognition();
     r.lang = 'ja-JP';
     r.interimResults = true;
-    r.continuous = false; // Androidでは false の方が安定
+    r.continuous = false;
     r.maxAlternatives = 1;
 
-    r.onstart = () => {
-      setStatus('🔴 録音中... 話しかけてください');
-    };
+    r.onstart = () => setStatus('🔴 録音中... 話しかけてください');
 
     r.onresult = (e) => {
       let interim = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const t = e.results[i][0].transcript;
-        if (e.results[i].isFinal) {
-          finalTranscript += t;
-        } else {
-          interim += t;
-        }
+        if (e.results[i].isFinal) finalTranscript += t;
+        else interim += t;
       }
       transcriptBox.value = finalTranscript + interim;
       updateSaveBtn();
     };
 
     r.onerror = (e) => {
-      // すべてのエラーを表示して診断
+      if (e.error === 'aborted') return;
+      if (e.error === 'no-speech') return; // 無音は無視して再起動
       setStatus('エラー: ' + e.error, 'error');
-      if (e.error !== 'no-speech' && e.error !== 'aborted') {
-        stopListening();
-      }
+      stopListening();
     };
 
     r.onend = () => {
       if (!isListening) return;
-      // 一発録音が終わったら自動で再起動（300ms待機）
       clearTimeout(restartTimer);
       restartTimer = setTimeout(() => {
         if (!isListening) return;
         recognition = createRecognition();
-        if (recognition) {
-          try { recognition.start(); } catch(_) {}
-        }
-      }, 300);
+        try { recognition.start(); } catch(_) {}
+      }, 250);
     };
 
     return r;
   }
 
-  function startListening() {
+  async function startListening() {
     if (!SpeechRecognition) {
       setStatus('このブラウザは音声認識に対応していません（Chrome推奨）', 'error');
       return;
     }
+
+    // Android対策: getUserMediaで先にマイク権限を取得・保持する
+    try {
+      setStatus('マイクの準備中...');
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (e) {
+      setStatus('マイクの許可が必要です: ' + e.message, 'error');
+      return;
+    }
+
     finalTranscript = transcriptBox.value;
     isListening = true;
     micBtn.classList.add('recording');
     micLabel.textContent = '録音停止';
     transcriptBox.classList.add('listening');
-    setStatus('🔴 録音中... 話しかけてください');
 
     recognition = createRecognition();
-    if (recognition) {
-      try { recognition.start(); } catch(e) {
-        setStatus('マイクの起動に失敗しました', 'error');
-        stopListening();
-      }
+    try {
+      recognition.start();
+    } catch (e) {
+      setStatus('起動失敗: ' + e.message, 'error');
+      stopListening();
     }
   }
 
@@ -368,6 +363,11 @@
     if (recognition) {
       try { recognition.abort(); } catch(_) {}
       recognition = null;
+    }
+    // マイクストリームを解放
+    if (micStream) {
+      micStream.getTracks().forEach(t => t.stop());
+      micStream = null;
     }
     micBtn.classList.remove('recording');
     micLabel.textContent = '録音開始';
