@@ -284,7 +284,9 @@
 
   transcriptBox.addEventListener('input', updateSaveBtn);
 
-  function initRecognition() {
+  let restartTimer = null;
+
+  function createRecognition() {
     if (!SpeechRecognition) {
       setStatus('このブラウザは音声認識に対応していません（Chrome推奨）', 'error');
       micBtn.disabled = true;
@@ -294,8 +296,12 @@
     const r = new SpeechRecognition();
     r.lang = 'ja-JP';
     r.interimResults = true;
-    r.continuous = true;
+    r.continuous = false; // Androidでは false の方が安定
     r.maxAlternatives = 1;
+
+    r.onstart = () => {
+      setStatus('🔴 録音中... 話しかけてください');
+    };
 
     r.onresult = (e) => {
       let interim = '';
@@ -312,43 +318,53 @@
     };
 
     r.onerror = (e) => {
-      if (e.error === 'no-speech') return;
+      if (e.error === 'no-speech' || e.error === 'aborted') return;
       setStatus('エラー: ' + e.error, 'error');
       stopListening();
     };
 
     r.onend = () => {
-      if (isListening) {
-        // Android Chromeは即時再起動で失敗するため少し待つ
-        setTimeout(() => {
-          if (isListening) {
-            try { r.start(); } catch(_) {}
-          }
-        }, 150);
-      }
+      if (!isListening) return;
+      // 一発録音が終わったら自動で再起動（300ms待機）
+      clearTimeout(restartTimer);
+      restartTimer = setTimeout(() => {
+        if (!isListening) return;
+        recognition = createRecognition();
+        if (recognition) {
+          try { recognition.start(); } catch(_) {}
+        }
+      }, 300);
     };
 
     return r;
   }
 
   function startListening() {
+    if (!SpeechRecognition) {
+      setStatus('このブラウザは音声認識に対応していません（Chrome推奨）', 'error');
+      return;
+    }
     finalTranscript = transcriptBox.value;
-    recognition = initRecognition();
-    if (!recognition) return;
-
-    recognition.start();
     isListening = true;
     micBtn.classList.add('recording');
     micLabel.textContent = '録音停止';
     transcriptBox.classList.add('listening');
     setStatus('🔴 録音中... 話しかけてください');
+
+    recognition = createRecognition();
+    if (recognition) {
+      try { recognition.start(); } catch(e) {
+        setStatus('マイクの起動に失敗しました', 'error');
+        stopListening();
+      }
+    }
   }
 
   function stopListening() {
     isListening = false;
+    clearTimeout(restartTimer);
     if (recognition) {
-      recognition.onend = null;
-      recognition.stop();
+      try { recognition.abort(); } catch(_) {}
       recognition = null;
     }
     micBtn.classList.remove('recording');
