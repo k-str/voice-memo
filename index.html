@@ -318,9 +318,11 @@
     };
 
     r.onerror = (e) => {
-      if (e.error === 'no-speech' || e.error === 'aborted') return;
+      // すべてのエラーを表示して診断
       setStatus('エラー: ' + e.error, 'error');
-      stopListening();
+      if (e.error !== 'no-speech' && e.error !== 'aborted') {
+        stopListening();
+      }
     };
 
     r.onend = () => {
