@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>音声テスト</title>
+<style>
+  body { font-family: sans-serif; padding: 20px; font-size: 18px; }
+  button { padding: 20px 40px; font-size: 20px; margin: 10px 0; display: block; width: 100%; }
+  #log { background: #f0f0f0; padding: 10px; margin-top: 20px; min-height: 100px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h2>音声認識テスト</h2>
+<button onclick="test()">録音テスト開始</button>
+<div id="log">ここにログが表示されます</div>
+<script>
+function log(msg) {
+  document.getElementById('log').textContent += '\n' + new Date().toLocaleTimeString() + ': ' + msg;
+}
+
+async function test() {
+  log('--- テスト開始 ---');
+
+  // Step 1: getUserMedia
+  log('1. マイク権限取得中...');
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    log('1. OK - マイク取得成功');
+    stream.getTracks().forEach(t => t.stop());
+  } catch(e) {
+    log('1. 失敗: ' + e.message);
+    return;
+  }
+
+  // Step 2: SpeechRecognition
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { log('2. SpeechRecognition 非対応'); return; }
+  log('2. SpeechRecognition 対応あり');
+
+  // Step 3: 認識起動
+  const r = new SR();
+  r.lang = 'ja-JP';
+  r.continuous = false;
+  r.interimResults = true;
+
+  r.onstart   = () => log('3. onstart 発火 → 録音中！');
+  r.onresult  = (e) => log('4. onresult: ' + e.results[0][0].transcript);
+  r.onerror   = (e) => log('ERR: ' + e.error);
+  r.onend     = () => log('END: 認識終了');
+
+  try {
+    r.start();
+    log('3. start() 呼び出し完了');
+  } catch(e) {
+    log('3. start() 例外: ' + e.message);
+  }
+}
+</script>
+</body>
+</html>
