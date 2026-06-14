@@ -319,8 +319,12 @@
 
     r.onend = () => {
       if (isListening) {
-        // 自動再起動（タイムアウト対策）
-        try { r.start(); } catch(_) {}
+        // Android Chromeは即時再起動で失敗するため少し待つ
+        setTimeout(() => {
+          if (isListening) {
+            try { r.start(); } catch(_) {}
+          }
+        }, 150);
       }
     };
 
