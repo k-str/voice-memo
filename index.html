@@ -227,7 +227,7 @@
 
 <header>
   <div class="dot"></div>
-  <h1>こえメモ <small style="font-size:0.6rem;opacity:0.5">v5</small></h1>
+  <h1>こえメモ <small style="font-size:0.6rem;opacity:0.5">v6</small></h1>
 </header>
 
 <section class="recorder">
@@ -290,27 +290,34 @@
     recognition = new SpeechRecognition();
     recognition.lang = 'ja-JP';
     recognition.interimResults = true;
-    recognition.continuous = true;
+    recognition.continuous = false; // 1発ごとに区切って二重防止
+
+    let sessionInterim = ''; // このセッションの中間テキスト
 
     recognition.onstart  = () => setStatus('🔴 録音中... 話しかけてください');
     recognition.onresult = (e) => {
-      let interim = '';
+      sessionInterim = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const t = e.results[i][0].transcript;
-        if (e.results[i].isFinal) finalTranscript += t;
-        else interim += t;
+        if (e.results[i].isFinal) {
+          finalTranscript += t;
+          sessionInterim = '';
+        } else {
+          sessionInterim += t;
+        }
       }
-      transcriptBox.value = finalTranscript + interim;
+      transcriptBox.value = finalTranscript + sessionInterim;
       updateSaveBtn();
     };
     recognition.onerror = (e) => {
+      if (e.error === 'no-speech' || e.error === 'aborted') return;
       setStatus('エラー: ' + e.error, 'error');
-      if (e.error !== 'no-speech' && e.error !== 'aborted') stopListening();
+      stopListening();
     };
     recognition.onend = () => {
       if (!isListening) return;
       restartTimer = setTimeout(() => {
-        if (isListening) startRecognition();
+        if (isListening) startRecognition(); // 次のセッションを開始
       }, 300);
     };
     recognition.start();
