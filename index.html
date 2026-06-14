@@ -291,7 +291,7 @@
     const r = new SpeechRecognition();
     r.lang = 'ja-JP';
     r.interimResults = true;
-    r.continuous = false;
+    r.continuous = true;
     r.maxAlternatives = 1;
 
     r.onstart = () => setStatus('🔴 録音中... 話しかけてください');
